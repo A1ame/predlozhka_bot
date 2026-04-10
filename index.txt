@@ -1,0 +1,1337 @@
+import TelegramBot from "node-telegram-bot-api";
+import { promises as fs } from "fs";
+import { DateTime } from "luxon";
+import config from "./config.json" with { type: "json" };
+
+// --- Логгер-бот ---
+const loggerBotToken = "";
+const targetUsername = "@ktozachemi";
+const loggerBot = new TelegramBot(loggerBotToken, { polling: true });
+let targetChatId = null;
+
+// Поиск chatId пользователя @ktozachemi
+const findTargetChatId = async () => {
+  try {
+    loggerBot.on("message", async (msg) => {
+      const username = msg.from.username;
+      if (username === targetUsername) {
+        targetChatId = msg.chat.id;
+        console.log(`Найден chatId для ${targetUsername}: ${targetChatId}`);
+        await loggerBot.sendMessage(targetChatId, `✅ Логи будут отправляться в этот чат.`);
+      }
+    });
+  } catch (error) {
+    console.error("❌ Ошибка поиска chatId:", error.message);
+  }
+};
+
+// Отправка лога
+const sendLog = async (level, message) => {
+  if (!targetChatId) {
+    console.warn(`⚠️ chatId для ${targetUsername} не найден. Лог не отправлен.`);
+    return;
+  }
+
+  const timestamp = DateTime.now().setZone("Asia/Yekaterinburg").toFormat("yyyy-MM-dd HH:mm:ss");
+  const formattedMessage = `[${level}] ${timestamp}\n${message}`;
+
+  try {
+    await loggerBot.sendMessage(targetChatId, formattedMessage, { parse_mode: "Markdown" });
+    console.log(`Лог отправлен в ${targetChatId}: [${level}] ${message}`);
+  } catch (error) {
+    console.error(`❌ Ошибка отправки лога в ${targetChatId}:`, error.message);
+  }
+};
+
+// Перехват console методов
+const originalConsole = {
+  log: console.log,
+  error: console.error,
+  warn: console.warn,
+  info: console.info,
+};
+
+console.log = (...args) => {
+  const message = args.map(arg => (typeof arg === "object" ? JSON.stringify(arg, null, 2) : arg)).join(" ");
+  originalConsole.log(...args);
+  sendLog("INFO", message);
+};
+
+console.error = (...args) => {
+  const message = args.map(arg => (typeof arg === "object" ? JSON.stringify(arg, null, 2) : arg)).join(" ");
+  originalConsole.error(...args);
+  sendLog("ERROR", message);
+};
+
+console.warn = (...args) => {
+  const message = args.map(arg => (typeof arg === "object" ? JSON.stringify(arg, null, 2) : arg)).join(" ");
+  originalConsole.warn(...args);
+  sendLog("WARN", message);
+};
+
+console.info = (...args) => {
+  const message = args.map(arg => (typeof arg === "object" ? JSON.stringify(arg, null, 2) : arg)).join(" ");
+  originalConsole.info(...args);
+  sendLog("INFO", message);
+};
+
+// Инициализация логгер-бота
+findTargetChatId();
+console.log("✅ Logger бот запущен!");
+console.log(`Часовой пояс: Asia/Yekaterinburg`);
+
+// --- Основной бот (predlozhka_bot) ---
+console.log("Загружен config:", {
+  adminChannelId: config.adminChannelId,
+  adminChannelIdType: typeof config.adminChannelId,
+  botToken: config.botToken ? "Указан" : "Отсутствует",
+  channels: Object.keys(config.channels || {}),
+  users: Object.keys(config.users || {}),
+  bannedUsers: config.bannedUsers ? (Array.isArray(config.bannedUsers) ? config.bannedUsers : Object.keys(config.bannedUsers)) : [],
+});
+
+const bot = new TelegramBot(config.botToken, { polling: true });
+const userState = {};
+const scheduledMessages = [];
+const mediaGroups = {};
+const userLastMessageTime = {}; // Для защиты от спама
+
+const adminKeyboard = {
+  reply_markup: {
+    keyboard: [
+      ["📅 Создать отложенное сообщение", "📨 Рассылка"],
+      ["📩 Рассылка пользователям", "📬 Запланировать рассылку пользователям"],
+      ["📋 Список каналов", "➕ Добавить канал", "🗑 Удалить канал"],
+      ["👥 Список пользователей", "🚫 Разбанить", "🆔 Получить ID чата"],
+      ["❌ Отмена"],
+    ],
+    resize_keyboard: true,
+  },
+};
+
+// Проверка прав бота в админском чате при старте
+const checkBotAdminStatus = async () => {
+  try {
+    const botInfo = await bot.getMe();
+    const admins = await bot.getChatAdministrators(config.adminChannelId);
+    const isAdmin = admins.some(a => a.user.id === botInfo.id);
+    console.log(`Статус бота в админском чате ${config.adminChannelId}:`, {
+      isAdmin,
+      botId: botInfo.id,
+      botUsername: botInfo.username,
+    });
+    if (!isAdmin) {
+      console.warn(`⚠️ Бот ${botInfo.username} не является администратором в чате ${config.adminChannelId}`);
+    }
+  } catch (error) {
+    console.error(`❌ Ошибка проверки прав бота в админском чате ${config.adminChannelId}:`, error);
+  }
+};
+
+checkBotAdminStatus();
+
+const saveConfig = async (config) => {
+  try {
+    await fs.writeFile("./config.json", JSON.stringify(config, null, 2));
+    console.log("Конфиг сохранён");
+  } catch (error) {
+    console.error("❌ Ошибка сохранения конфига:", error);
+  }
+};
+
+const scheduleMessage = async ({ messageId, content, time, channels, pin }) => {
+  const scheduleTime = new Date(time);
+  const now = DateTime.now().setZone("Asia/Yekaterinburg").toJSDate();
+  const delay = scheduleTime.getTime() - now.getTime();
+
+  console.log("Планирование:", {
+    messageId,
+    time: scheduleTime.toISOString(),
+    localTime: DateTime.fromJSDate(scheduleTime).setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL),
+    now: now.toISOString(),
+    nowLocal: DateTime.fromJSDate(now).setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL),
+    delay,
+    channels,
+    pin,
+    contentType: content.text ? "text" : content.mediaGroup ? "mediaGroup" : content.media ? "media" : "unknown",
+    contentDetails: content.mediaGroup
+      ? `mediaGroup (messages: ${content.mediaGroup.length})`
+      : content.media
+      ? `media (${content.media.photo ? "photo" : content.media.video ? "video" : content.media.document ? "document" : "unknown"})`
+      : content.text
+      ? `text: ${content.text.substring(0, 50)}...`
+      : "none",
+  });
+
+  if (delay <= 0) {
+    console.log(`⚠️ ${messageId} не запланировано, время прошло.`);
+    bot.sendMessage(config.adminChannelId, `⚠️ Сообщение ${messageId} не отправлено: время ${DateTime.fromJSDate(scheduleTime).setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL)} прошло.`, adminKeyboard);
+    return;
+  }
+
+  const validChannels = channels.filter(channelCode => {
+    const exists = !!config.channels[channelCode];
+    if (!exists) {
+      console.log(`⚠️ Канал ${channelCode} не найден в config.channels`);
+      bot.sendMessage(config.adminChannelId, `⚠️ Канал ${channelCode} не найден для сообщения ${messageId}.`, adminKeyboard);
+    }
+    return exists;
+  });
+
+  if (!validChannels.length) {
+    console.log(`❌ ${messageId} не запланировано: нет валидных каналов.`);
+    bot.sendMessage(config.adminChannelId, `❌ Сообщение ${messageId} не отправлено: нет доступных каналов.`, adminKeyboard);
+    return;
+  }
+
+  console.log(`Запланировано выполнение для ${messageId} через ${delay} мс`);
+
+  const timeout = setTimeout(async () => {
+    console.log(`Начало отправки сообщения ${messageId} в ${new Date().toISOString()} (local: ${DateTime.now().setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL)})`);
+
+    try {
+      for (const channelCode of validChannels) {
+        if (!config.channels[channelCode]) {
+          console.log(`⚠️ Пропуск ${channelCode} для ${messageId}: канал не существует`);
+          continue;
+        }
+        const channelId = config.channels[channelCode].channelId;
+        console.log(`Отправка в канал ${channelCode} (ID: ${channelId})`);
+
+        try {
+          const admins = await bot.getChatAdministrators(channelId);
+          const botInfo = await bot.getMe();
+          if (!admins.some(a => a.user.id === botInfo.id)) {
+            console.log(`❌ Бот не администратор в канале ${channelCode} (ID: ${channelId})`);
+            bot.sendMessage(config.adminChannelId, `❌ Бот не администратор в ${channelCode} для сообщения ${messageId}.`, adminKeyboard);
+            continue;
+          }
+        } catch (error) {
+          console.error(`❌ Ошибка проверки прав для ${channelCode} (ID: ${channelId}):`, error);
+          bot.sendMessage(config.adminChannelId, `❌ Ошибка проверки прав в ${channelCode} для сообщения ${messageId}.`, adminKeyboard);
+          continue;
+        }
+
+        let sentMessageIds = [];
+        if (content.text) {
+          console.log(`Отправка текста в ${channelCode}: ${content.text.substring(0, 50)}...`);
+          const sentMessage = await bot.sendMessage(channelId, content.text, { parse_mode: "MarkdownV2" });
+          sentMessageIds.push(sentMessage.message_id);
+        } else if (content.mediaGroup) {
+          console.log(`Отправка медиа-группы в ${channelCode}, элементов: ${content.mediaGroup.length}`);
+          const mediaArray = content.mediaGroup
+            .map(m => {
+              let type, media;
+              if (m.photo) {
+                type = "photo";
+                media = m.photo[m.photo.length - 1].file_id;
+              } else if (m.video) {
+                type = "video";
+                media = m.video.file_id;
+              } else if (m.document) {
+                type = "document";
+                media = m.document.file_id;
+              } else {
+                console.log(`⚠️ Пропуск элемента медиа-группы в ${channelCode}: неизвестный тип`);
+                return null;
+              }
+              return { type, media, caption: m.caption || "" };
+            })
+            .filter(item => item !== null);
+
+          if (mediaArray.length === 0) {
+            console.log(`❌ Медиа-группа пуста для ${channelCode}`);
+            bot.sendMessage(config.adminChannelId, `❌ Медиа-группа пуста для ${channelCode} в сообщении ${messageId}.`, adminKeyboard);
+            continue;
+          }
+
+          console.log(`Отправка медиа-группы в ${channelCode}:`, JSON.stringify(mediaArray, null, 2));
+          const sentMessages = await bot.sendMediaGroup(channelId, mediaArray);
+          sentMessageIds = sentMessages.map(msg => msg.message_id);
+        } else if (content.media) {
+          if (content.media.photo) {
+            console.log(`Отправка фото в ${channelCode}`);
+            const sentMessage = await bot.sendPhoto(channelId, content.media.photo[content.media.photo.length - 1].file_id, { caption: content.media.caption || "" });
+            sentMessageIds.push(sentMessage.message_id);
+          } else if (content.media.video) {
+            console.log(`Отправка видео в ${channelCode}`);
+            const sentMessage = await bot.sendVideo(channelId, content.media.video.file_id, { caption: content.media.caption || "" });
+            sentMessageIds.push(sentMessage.message_id);
+          } else if (content.media.document) {
+            console.log(`Отправка документа в ${channelCode}`);
+            const sentMessage = await bot.sendDocument(channelId, content.media.document.file_id, { caption: content.media.caption || "" });
+            sentMessageIds.push(sentMessage.message_id);
+          } else {
+            console.log(`❌ Неизвестный тип медиа для ${channelCode}`);
+            bot.sendMessage(config.adminChannelId, `❌ Неизвестный тип медиа для ${channelCode} в сообщении ${messageId}.`, adminKeyboard);
+            continue;
+          }
+        }
+
+        if (pin && sentMessageIds.length > 0) {
+          try {
+            await bot.pinChatMessage(channelId, sentMessageIds[0], { disable_notification: true });
+            console.log(`Сообщение ${sentMessageIds[0]} закреплено в ${channelCode}`);
+          } catch (error) {
+            console.error(`❌ Ошибка закрепления сообщения ${sentMessageIds[0]} в ${channelCode}:`, error);
+            bot.sendMessage(config.adminChannelId, `❌ Ошибка закрепления сообщения в ${channelCode} для ${messageId}.`, adminKeyboard);
+          }
+        }
+      }
+
+      console.log(`Успешная отправка сообщения ${messageId} в ${validChannels.join(", ")}`);
+      config.scheduledMessages = config.scheduledMessages.filter(msg => msg.messageId !== messageId);
+      await saveConfig(config);
+      console.log(`Сообщение ${messageId} удалено из config.scheduledMessages`);
+      bot.sendMessage(
+        config.adminChannelId,
+        `✅ Отправлено в ${validChannels.map(c => config.channels[c].name || c).join(", ")} в ${DateTime.now().setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL)}.`,
+        adminKeyboard
+      );
+    } catch (error) {
+      console.error(`❌ Ошибка отправки сообщения ${messageId}:`, error);
+      bot.sendMessage(config.adminChannelId, `❌ Ошибка отправки сообщения ${messageId}: ${error.message}`, adminKeyboard);
+    }
+  }, delay);
+
+  scheduledMessages.push({ messageId, timeout });
+  console.log(`Таймер установлен для ${messageId} на ${scheduleTime.toISOString()}`);
+};
+
+const scheduleUserBroadcast = async ({ messageId, content, time, users }) => {
+  const scheduleTime = new Date(time);
+  const now = DateTime.now().setZone("Asia/Yekaterinburg").toJSDate();
+  const timeDiff = scheduleTime.getTime() - now.getTime();
+
+  console.log("Планирование рассылки пользователям:", {
+    messageId,
+    time: scheduleTime.toISOString(),
+    localTime: DateTime.fromJSDate(scheduleTime).setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL),
+    now: now.toISOString(),
+    nowLocal: DateTime.fromJSDate(now).setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL),
+    timeDiff,
+    users,
+    contentType: content.text ? "text" : content.mediaGroup ? "mediaGroup" : content.media ? "media" : "unknown",
+    contentDetails: content.mediaGroup
+      ? `mediaGroup (messages: ${content.mediaGroup.length})`
+      : content.media
+      ? `media (${content.media.photo ? "photo" : content.media.video ? "video" : content.media.document ? "document" : "unknown"})`
+      : content.text
+      ? `text: ${content.text.substring(0, 50)}...`
+      : "none",
+  });
+
+  if (timeDiff <= 0) {
+    console.log(`⚠️ ${messageId} не запланировано, время прошло.`);
+    bot.sendMessage(config.adminChannelId, `⚠️ Рассылка ${messageId} не отправлена: время ${DateTime.fromJSDate(scheduleTime).setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL)} прошло.`, adminKeyboard);
+    return;
+  }
+
+  const validUsers = users.filter(userId => {
+    const exists = !!config.users[userId] && !config.bannedUsers?.[userId];
+    if (!exists) {
+      console.log(`⚠️ Пользователь ${userId} не найден или забанен`);
+      bot.sendMessage(config.adminChannelId, `⚠️ Пользователь ${userId} не найден для рассылки ${messageId}.`, adminKeyboard);
+    }
+    return exists;
+  });
+
+  if (!validUsers.length) {
+    console.log(`❌ ${messageId} не запланировано: нет валидных пользователей.`);
+    bot.sendMessage(config.adminChannelId, `❌ Рассылка ${messageId} не отправлена: нет доступных пользователей.`, adminKeyboard);
+    return;
+  }
+
+  console.log(`Запланировано выполнение рассылки для ${messageId} через ${timeDiff} мс`);
+
+  const timeout = setTimeout(async () => {
+    console.log(`Начало отправки рассылки ${messageId} в ${new Date().toISOString()} (local: ${DateTime.now().setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL)})`);
+
+    try {
+      for (const userIdToBroadcast of validUsers) {
+        console.log(`Отправка пользователю ${userIdToBroadcast}`);
+
+        if (content.text) {
+          console.log(`Отправка текста пользователю ${userIdToBroadcast}: ${content.text.substring(0, 50)}...`);
+          await bot.sendMessage(userIdToBroadcast, content.text, { parse_mode: "MarkdownV2" });
+        } else if (content.mediaGroup) {
+          console.log(`Отправка медиа-группы пользователю ${userIdToBroadcast}, элементов: ${content.mediaGroup.length}`);
+          const mediaArray = content.mediaGroup
+            .map(m => {
+              let type, media;
+              if (m.photo) {
+                type = "photo";
+                media = m.photo[m.photo.length - 1].file_id;
+              } else if (m.video) {
+                type = "video";
+                media = m.video.file_id;
+              } else if (m.document) {
+                type = "document";
+                media = m.document.file_id;
+              } else {
+                console.log(`⚠️ Пропуск элемента медиа-группы для ${userIdToBroadcast}: неизвестный тип`);
+                return null;
+              }
+              return { type, media, caption: m.caption || "" };
+            })
+            .filter(item => item !== null);
+
+          if (mediaArray.length === 0) {
+            console.log(`❌ Медиа-группа пуста для ${userIdToBroadcast}`);
+            bot.sendMessage(config.adminChannelId, `❌ Медиа-группа пуста для ${userIdToBroadcast} в рассылке ${messageId}.`, adminKeyboard);
+            continue;
+          }
+
+          console.log(`Отправка медиа-группы пользователю ${userIdToBroadcast}:`, JSON.stringify(mediaArray, null, 2));
+          await bot.sendMediaGroup(userIdToBroadcast, mediaArray);
+        } else if (content.media) {
+          if (content.media.photo) {
+            console.log(`Отправка фото пользователю ${userIdToBroadcast}`);
+            await bot.sendPhoto(userIdToBroadcast, content.media.photo[content.media.photo.length - 1].file_id, { caption: content.media.caption || "" });
+          } else if (content.media.video) {
+            console.log(`Отправка видео пользователю ${userIdToBroadcast}`);
+            await bot.sendVideo(userIdToBroadcast, content.media.video.file_id, { caption: content.media.caption || "" });
+          } else if (content.media.document) {
+            console.log(`Отправка документа пользователю ${userIdToBroadcast}`);
+            await bot.sendDocument(userIdToBroadcast, content.media.document.file_id, { caption: content.media.caption || "" });
+          } else {
+            console.log(`❌ Неизвестный тип медиа для ${userIdToBroadcast}`);
+            bot.sendMessage(config.adminChannelId, `❌ Неизвестный тип медиа для ${userIdToBroadcast} в рассылке ${messageId}.`, adminKeyboard);
+          }
+        }
+      }
+
+      console.log(`✅ Успешная рассылка пользователям ${validUsers.join(", ")}`);
+      bot.sendMessage(
+        config.adminChannelId,
+        `✅ Рассылка ${messageId} выполнена пользователям ${validUsers.join(", ")} в ${DateTime.now().setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL)}.`,
+        adminKeyboard
+      );
+      console.log(`Рассылка завершена для ${messageId}`);
+    } catch (error) {
+      console.error(`❌ Ошибка отправки рассылки ${messageId}:`, error);
+      bot.sendMessage(config.adminChannelId, `❌ Ошибка отправки рассылки ${messageId}: ${error.message}`, adminKeyboard);
+    }
+  }, timeDiff);
+
+  scheduledMessages.push({ messageId, timeout });
+  console.log(`Таймер установлен для ${messageId} на ${scheduleTime.toISOString()}`);
+};
+
+const sendUserBroadcast = async (adminId, { content, scheduleTime = null }) => {
+  console.log(`Начало ${scheduleTime ? "запланированной" : "немедленной"} рассылки пользователям для ${adminId}`);
+  if (!config.users || !Object.keys(config.users).length) {
+    console.log(`⚠️ Нет пользователей для ${adminId}`);
+    bot.sendMessage(config.adminChannelId, "⚠️ Нет пользователей для рассылки.", adminKeyboard);
+    delete userState[adminId];
+    return;
+  }
+
+  const users = Object.keys(config.users).filter(userId => !config.bannedUsers?.[userId]);
+  console.log(`Список пользователей для рассылки: ${users.join(", ")}`);
+  if (!users.length) {
+    console.log(`⚠️ Нет доступных пользователей для ${adminId}`);
+    bot.sendMessage(config.adminChannelId, "⚠️ Нет доступных пользователей для рассылки.", adminKeyboard);
+    delete userState[adminId];
+    return;
+  }
+
+  if (scheduleTime) {
+    const messageId = Date.now().toString();
+    console.log(`Планирование рассылки для ${messageId}: ${scheduleTime.toISOString()}`);
+    scheduleUserBroadcast({ messageId, content, time: scheduleTime, users });
+    console.log(`Рассылка запланирована для ${messageId}: ${users.join(", ")}`);
+    bot.sendMessage(
+      config.adminChannelId,
+      `📅 Рассылка запланирована на ${DateTime.fromJSDate(scheduleTime).setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL)} для пользователей ${users.join(", ")}.`,
+      adminKeyboard
+    );
+    delete userState[adminId];
+    return;
+  }
+
+  console.log(`Выполнение немедленной рассылки для ${users.join(", ")}`);
+  try {
+    for (const userIdToBroadcast of users) {
+      console.log(`Отправка пользователю ${userIdToBroadcast}`);
+      if (!config.users[userIdToBroadcast] || config.bannedUsers?.[userIdToBroadcast]) {
+        console.log(`⚠️ Пропуск пользователя ${userIdToBroadcast}: не существует или забанен`);
+        continue;
+      }
+
+      if (content.text) {
+        console.log(`Отправка текста пользователю ${userIdToBroadcast}: ${content.text.substring(0, 50)}...`);
+        await bot.sendMessage(userIdToBroadcast, content.text, { parse_mode: "MarkdownV2" });
+      } else if (content.mediaGroup) {
+        console.log(`Отправка медиа-группы пользователю ${userIdToBroadcast}, элементов: ${content.mediaGroup.length}`);
+        const mediaArray = content.mediaGroup
+          .map(m => {
+            let type, media;
+            if (m.photo) {
+              type = "photo";
+              media = m.photo[m.photo.length - 1].file_id;
+            } else if (m.video) {
+              type = "video";
+              media = m.video.file_id;
+            } else if (m.document) {
+              type = "document";
+              media = m.document.file_id;
+            } else {
+              console.log(`⚠️ Пропуск элемента медиа-группы для ${userIdToBroadcast}: неизвестный тип`);
+              return null;
+            }
+            return { type, media, caption: m.caption || "" };
+          })
+          .filter(item => item !== null);
+
+        if (mediaArray.length === 0) {
+          console.log(`❌ Медиа-группа пуста для ${userIdToBroadcast}`);
+          continue;
+        }
+
+        console.log(`Отправка медиа-группы пользователю ${userIdToBroadcast}:`, JSON.stringify(mediaArray, null, 2));
+        await bot.sendMediaGroup(userIdToBroadcast, mediaArray);
+      } else if (content.media) {
+        if (content.media.photo) {
+          console.log(`Отправка фото пользователю ${userIdToBroadcast}`);
+          await bot.sendPhoto(userIdToBroadcast, content.media.photo[content.media.photo.length - 1].file_id, { caption: content.media.caption || "" });
+        } else if (content.media.video) {
+          console.log(`Отправка видео пользователю ${userIdToBroadcast}`);
+          await bot.sendVideo(userIdToBroadcast, content.media.video.file_id, { caption: content.media.caption || "" });
+        } else if (content.media.document) {
+          console.log(`Отправка документа пользователю ${userIdToBroadcast}`);
+          await bot.sendDocument(userIdToBroadcast, content.media.document.file_id, { caption: content.media.caption || "" });
+        } else {
+          console.log(`⚠️ Неверный тип медиа для ${userIdToBroadcast}`);
+          bot.sendMessage(config.adminChannelId, `⚠️ Неверный тип медиа для ${userIdToBroadcast} в рассылке.`, adminKeyboard);
+        }
+      }
+    }
+
+    console.log(`✓ Успешная рассылка пользователям ${users.join(", ")}`);
+    bot.sendMessage(
+      config.adminChannelId,
+      `✓ Рассылка выполнена пользователям ${users.join(", ")} в ${DateTime.now().setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL)}.`,
+      adminKeyboard
+    );
+    console.log(`Рассылка завершена`);
+  } catch (error) {
+    console.error(`❌ Ошибка рассылки:`, error);
+    bot.sendMessage(config.adminChannelId, `❌ Ошибка рассылки: ${error.message}`, adminKeyboard);
+  }
+
+  console.log(`Удаление состояния пользователя ${adminId}`);
+  delete userState[adminId];
+};
+
+const handleAdminMessage = async (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+  const text = msg.text || "";
+  const media_group_id = msg.media_group_id || "none";
+
+  console.log(`Сообщение в админском чате от ${userId}:`, {
+    text,
+    textLength: text.length,
+    textRaw: JSON.stringify(text),
+    userState: userState[userId]?.state || "none",
+    media_group_id,
+    photo: msg.photo ? `photo (${msg.photo.length})` : "no",
+    video: msg.video ? `video` : "no",
+    document: msg.document ? `document` : "no",
+  });
+
+  if (text.trim() === "📅 Создать отложенное сообщение") {
+    userState[userId] = { state: "awaiting_scheduled_content", scheduledData: {} };
+    console.log(`Состояние для ${userId} изменено: awaiting_scheduled_content`);
+    bot.sendMessage(chatId, "📢 Отправьте контент для отложенного сообщения (текст, фото, видео или медиа-группу):", adminKeyboard);
+    return;
+  }
+
+  if (text.trim() === "📋 Список каналов") {
+    if (!config.channels || !Object.keys(config.channels).length) {
+      console.log(`⚠️ Нет каналов для ${userId}`);
+      bot.sendMessage(chatId, "⚠️ Нет каналов.", adminKeyboard);
+      return;
+    }
+    const channelList = Object.entries(config.channels)
+      .map(([code, channel]) => `${code}: ${channel.name} (${channel.channelId})`)
+      .join("\n");
+    console.log(`Список каналов отправлен: ${channelList}`);
+    bot.sendMessage(chatId, `📋 Список каналов:\n${channelList}`, adminKeyboard);
+    return;
+  }
+
+  if (text.trim() === "➕ Добавить канал") {
+    userState[userId] = { state: "awaiting_channel_code" };
+    console.log(`Состояние для ${userId} изменено: awaiting_channel_code`);
+    bot.sendMessage(chatId, "📝 Введите код канала (например, channel1):", adminKeyboard);
+    return;
+  }
+
+  if (text.trim() === "🗑 Удалить канал") {
+    if (!config.channels || !Object.keys(config.channels).length) {
+      console.log(`⚠️ Нет каналов для удаления для ${userId}`);
+      bot.sendMessage(chatId, "⚠️ Нет каналов для удаления.", adminKeyboard);
+      return;
+    }
+    userState[userId] = { state: "awaiting_channel_delete" };
+    console.log(`Состояние для ${userId} изменено: awaiting_channel_delete`);
+    const channelButtons = Object.entries(config.channels).map(([code, channel]) => [{ text: channel.name || code, callback_data: `delete_channel|${code}` }]);
+    console.log(`Кнопки удаления каналов отправлены:`, channelButtons);
+    bot.sendMessage(chatId, "📢 Выберите канал для удаления:", {
+      reply_markup: { inline_keyboard: channelButtons },
+    });
+    return;
+  }
+
+  if (text.trim() === "📨 Рассылка") {
+    userState[userId] = { state: "awaiting_broadcast_content", broadcastData: {} };
+    console.log(`Состояние для ${userId} изменено: awaiting_broadcast_content`);
+    bot.sendMessage(chatId, "📢 Отправьте контент для рассылки каналам (текст, фото, видео или медиа-группу):", adminKeyboard);
+    return;
+  }
+
+  if (text.trim() === "📩 Рассылка пользователям") {
+    userState[userId] = { state: "awaiting_user_broadcast_content", userBroadcastData: { immediate: true } };
+    console.log(`Состояние для ${userId} изменено: awaiting_user_broadcast_content`);
+    bot.sendMessage(chatId, "📩 Отправьте контент для рассылки пользователям (текст, фото, видео или медиа-группу):", adminKeyboard);
+    return;
+  }
+
+  if (text.trim() === "📬 Запланировать рассылку пользователям") {
+    userState[userId] = { state: "awaiting_user_broadcast_content", userBroadcastData: { immediate: false } };
+    console.log(`Состояние для ${userId} изменено: awaiting_user_broadcast_content (scheduled)`);
+    bot.sendMessage(chatId, "📬 Отправьте контент для запланированной рассылки пользователям (текст, фото, видео):", adminKeyboard);
+    return;
+  }
+
+  if (text.trim() === "👥 Список пользователей") {
+    if (!config.users || !Object.keys(config.users).length) {
+      console.log(`⚠️ Нет пользователей для ${userId}`);
+      bot.sendMessage(chatId, "⚠️ Нет пользователей.", adminKeyboard);
+      return;
+    }
+    const userList = Object.entries(config.users)
+      .map(([id, user]) => `ID: ${id}, admin: ${user.isAdmin}`)
+      .join("\n");
+    console.log(`Список пользователей отправлен: ${userList}`);
+    bot.sendMessage(chatId, `👥 Пользователи:\n${userList}`, adminKeyboard);
+    return;
+  }
+
+  if (text.trim() === "🚫 Разбанить") {
+    if (!config.bannedUsers || Object.keys(config.bannedUsers).length === 0) {
+      console.log(`⚠️ Нет забаненных пользователей для ${userId}`);
+      bot.sendMessage(chatId, "⚠️ Нет забаненных пользователей.", adminKeyboard);
+      return;
+    }
+    userState[userId] = { state: "awaiting_user_unban" };
+    console.log(`Состояние для ${userId} изменено: awaiting_user_unban`);
+    bot.sendMessage(chatId, "📋 Введите ID пользователя для разбана (например, 123456789):", adminKeyboard);
+    return;
+  }
+
+  if (text.trim() === "🆔 Получить ID чата") {
+    console.log(`Отправлен ID чата для ${userId}: ${chatId}`);
+    bot.sendMessage(chatId, `🆔 ID этого чата: ${chatId}`, adminKeyboard);
+    return;
+  }
+
+  if (text.trim() === "❌ Отмена") {
+    if (userState[userId]) {
+      console.log(`Состояние сброшено для ${userId}:`, userState[userId]);
+      delete userState[userId];
+      console.log(`Состояние удалено для ${userId}`);
+      bot.sendMessage(chatId, "✅ Действие отменено.", adminKeyboard);
+    } else {
+      console.log(`⚠️ Нет активных действий для ${userId}`);
+      bot.sendMessage(chatId, "⚠️ Нет активных действий для отмены.", adminKeyboard);
+    }
+    return;
+  }
+
+  if (userState[userId]?.state === "awaiting_channel_code") {
+    if (!text || text.includes(" ")) {
+      console.log(`⚠️ Ошибка ввода кода канала для ${userId}: ${text}`);
+      bot.sendMessage(chatId, "⚠️ Код канала не должен содержать пробелы. Попробуйте снова.", adminKeyboard);
+      return;
+    }
+    userState[userId].state = "awaiting_channel_id";
+    userState[userId].channelCode = text;
+    console.log(`Состояние для ${userId} изменено: awaiting_channel_id, код: ${text}`);
+    bot.sendMessage(chatId, "📝 Введите ID канала (например, -100123456789):", adminKeyboard);
+    return;
+  }
+
+  if (userState[userId]?.state === "awaiting_channel_id") {
+    if (!text || !/^-?100\d{10}$/.test(text)) {
+      console.log(`⚠️ Ошибка ID канала для ${userId}: ${text}`);
+      bot.sendMessage(chatId, "⚠️ ID канала должен быть числом, начинающимся с -100. Попробуйте снова.", adminKeyboard);
+      return;
+    }
+    userState[userId].state = "awaiting_channel_name";
+    userState[userId].channelId = text;
+    console.log(`Состояние для ${userId} изменено: awaiting_channel_name, ID: ${text}`);
+    bot.sendMessage(chatId, "📝 Введите название канала:", adminKeyboard);
+    return;
+  }
+
+  if (userState[userId]?.state === "awaiting_channel_name") {
+    if (!text) {
+      console.log(`⚠️ Ошибка названия канала для ${userId}: ${text}`);
+      bot.sendMessage(chatId, "⚠️ Название канала не может быть пустым.", adminKeyboard);
+      return;
+    }
+    const channelCode = userState[userId].channelCode;
+    console.log(`Сохранение канала для ${userId}: ${channelCode}, ${text}`);
+    config.channels[channelCode] = { channelId: userState[userId].channelId, name: text };
+    await saveConfig(config);
+    console.log(`Канал добавлен для ${userId}: ${channelCode}, ${text}, ${userState[userId].channelId}`);
+    bot.sendMessage(config.adminChannelId, `✅ Канал ${channelCode} добавлен: ${text} (${userState[userId].channelId})`, adminKeyboard);
+    delete userState[userId];
+    return;
+  }
+
+  if (userState[userId]?.state === "awaiting_broadcast_content") {
+    console.log(`Обработка контента рассылки для ${userId}`);
+    if (media_group_id !== "none") {
+      if (!mediaGroups[media_group_id]) {
+        mediaGroups[media_group_id] = { messages: [], timeout: null };
+        console.log(`Начало создания медиа-группы ${media_group_id} для ${userId}`);
+      }
+      mediaGroups[media_group_id].messages.push(msg);
+      console.log(`Добавлено в медиа-группу ${media_group_id}, сообщений: ${mediaGroups[media_group_id].messages.length}`);
+
+      if (mediaGroups[media_group_id].timeout) {
+        clearTimeout(mediaGroups[media_group_id].timeout);
+        console.log(`Таймер очищен для ${media_group_id}`);
+      }
+
+      mediaGroups[media_group_id].timeout = setTimeout(async () => {
+        console.log(`Завершение обработки медиа-группы ${media_group_id} для ${userId}`);
+        userState[userId].broadcastData.content = { mediaGroup: mediaGroups[media_group_id].messages };
+        userState[userId].state = "awaiting_broadcast_channels";
+        console.log(`Состояние для ${userId} изменено: awaiting_broadcast_channels`);
+        if (!config.channels || !Object.keys(config.channels).length) {
+          console.log(`⚠️ Нет каналов для ${userId}`);
+          bot.sendMessage(config.adminChannelId, "⚠️ Нет каналов для рассылки.", adminKeyboard);
+          delete userState[userId];
+          return;
+        }
+        const channelButtons = Object.entries(config.channels).map(([code, channel]) => [{ text: channel.name || code, callback_data: `select_broadcast_channel|${code}` }]);
+        console.log(`Отправка кнопок выбора каналов:`, channelButtons);
+        bot.sendMessage(config.adminChannelId, "📩 Выберите каналы для рассылки:", {
+          reply_markup: { inline_keyboard: [...channelButtons, [{ text: "✅ Завершить выбор", callback_data: "finish_broadcast_channels" }]] },
+        });
+        delete mediaGroups[media_group_id];
+        console.log(`Медиа-группа ${media_group_id} удалена`);
+      }, 5000);
+    } else if (msg.text || msg.photo || msg.video || msg.document) {
+      userState[userId].broadcastData.content = {
+        text: msg.text,
+        media: msg.photo ? { photo: msg.photo, caption: msg.caption } : msg.video ? { video: msg.video, caption: msg.caption } : msg.document ? { document: msg.document, caption: msg.caption } : null,
+      };
+      userState[userId].state = "awaiting_broadcast_channels";
+      console.log(`Состояние для ${userId} изменено: awaiting_broadcast_channels`);
+      if (!config.channels || !Object.keys(config.channels).length) {
+        console.log(`⚠️ Нет каналов для ${userId}`);
+        bot.sendMessage(config.adminChannelId, "⚠️ Нет каналов для рассылки.", adminKeyboard);
+        delete userState[userId];
+        return;
+      }
+      const channelButtons = Object.entries(config.channels).map(([code, channel]) => [{ text: channel.name || code, callback_data: `select_broadcast_channel${code}` }]);
+      console.log(`Кнопки выбора каналов отправлены:`, channelButtons);
+      bot.sendMessage(config.adminChannelId, "📢 Выберите каналы для рассылки:", {
+        reply_markup: { inline_keyboard: [...channelButtons, [{ text: "✅ Завершить выбор", callback_data: "finish_broadcast_channels" }]] },
+      });
+      setTimeout(() => {
+        if (userState[userId]?.state === "undefined") {
+          console.log(`⚠️ Время выбора каналов ${userId}`);
+          bot.sendMessage(config.adminChannelId, "⚠ Выбор каналов.", adminKeyboard);
+          delete userState[userId];
+        }
+      }, 300000);
+    } else {
+      console.log(`⚠️ ${msg.text} for ${userId}`);
+      bot.sendMessage(chatId, "⚠ Текст, фото или видео.", adminKeyboard);
+    }
+    return;
+  }
+
+  if (userState[userId]?.state === "awaiting_user_broadcast_content") {
+    console.log(`Обработка контента рассылки пользователям для ${userId}`);
+    let content = {};
+    if (media_group_id !== null) {
+      if (!mediaGroups[media_group_id]) {
+        mediaGroups[media_group_id] = mediaGroups[media_group_id] || { messages: [], timeout: null };
+        console.log(`media_groups ${media_group_id} for ${userId}`);
+      }
+      mediaGroups[media_group_id].push(msg);      console.log(`Added ${media_group_id}, messages: ${media_group_id.messages.length}`);
+
+      if (mediaGroups[media_group_id].timeout) {
+        clearTimeout(mediaGroups[media_group_id].timeout);        console.log(`Cleared timer for ${media_group_id}`);
+      }
+      mediaGroups[media_group_id].timeout = setTimeout(() => {
+        console.log(`Processing media group ${media_group_id} for ${userId}`);
+        userState[userId].userBroadcastData.content = { mediaGroup: mediaGroups[media_group_id].messages };
+        userState[userId].state = userState[userId].userBroadcastData.immediate ? "awaiting_broadcast_confirmation" : "awaiting_user_broadcast_time";
+        console.log(`[${userId}]: ${userState[userId].state}, immediate: ${userState[userId].userBroadcastData.immediate}`);
+        if (userState[userId].userBroadcastData.immediate) {
+          console.log(`Waiting for ${userId}`);
+          bot.sendMessage(config.adminChannelId, {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "✔", callback_data: "confirm_user_broadcast" }],
+                [{ text: "✗", callback_data: "cancel_user_broadcast" }]
+              ]
+            }
+          });
+        } else {
+          console.log(`Waiting for ${userId}`);
+          console.log("⏰ Time (DD.MM.YYYY HH:MM, e.g., 15.07.2025):", adminKeyboard);
+        }
+        delete mediaGroups[media_group_id];        console.log(`Deleted ${media_group_id}`);
+      }, 5000);
+    } else if (msg.text || msg.photo || msg.video || msg.document) {
+      content = {
+        text: msg.text,
+        media: msg.photo ? { photo: msg.photo, caption: caption } :
+          msg.video ? { video: msg.video, caption: msg.caption } :
+          msg.document ? { doc: msg.document, caption: msg.caption } :
+          null
+      };
+      console.log(`Content for ${userId}:`, content);
+      userState[userId].userBroadcastData.content = content;
+      userState[userId].state = userState[userId].userBroadcastData.immediate ? "awaiting_broadcast_confirmation" : "awaiting_user_broadcast_time";
+      console.log(`[${userId}]: ${userState[userId].state}`);
+      if (userState[userId].userBroadcastData.immediate) {
+        console.log(`Waiting for ${userId}`);
+        bot.sendMessage(config.adminChannelId, {
+          reply: {
+            inline_keyboard: [
+              [{ text: "✓ Confirm", callback_data: "confirm_user_broadcast" }],
+              [{ text: "✗ Cancel", callback_data: "cancel_user_broadcast" }]
+            ]
+          }
+        });
+      } else {
+        console.log(`Waiting for ${userId}`);
+        console.log("⏰ Time (DD.MM.YYYY HH:MM, e.g., 25.07.2025 14:30):", adminKeyboard);
+      }
+    } else {
+      console.log(`⚠ ${msg.text} for ${userId}`);
+      console.log("⚠ Send media.", adminKeyboard);
+    }
+    return;
+  }
+
+  if (userState[userId]?.state === "awaiting_user_broadcast_time") {
+    if (!/^\d{2}\.\d{2}\.\d{4} [0-2]\d:[0-5]\d$/.test(text)) {
+      console.log(`❌ Invalid time for ${userId}: ${text}`);
+      console.log("❌ Format: DD.MM.YYYY HH:MM.", adminKeyboard);
+      return;
+    }
+    try {
+      const [date, time] = text.split(" ");
+      const [day, month, year] = date.split(".").map(Number);
+      const [hours, minutes] = time.split(":").map(Number);
+      const scheduleTime = DateTime.fromObject(
+        { year, month, day, hour: hours, minute: minutes },
+        { zone: "Asia/Yekaterinburg" }
+      );
+      const now = DateTime.now().setZone("Asia/Yekaterinburg");
+
+      console.log(`Parsed time for ${userId}: ${scheduleTime.toISO()}, localTime: ${scheduleTime.toLocaleString(DateTime.DATETIME_FULL)}, now: ${now.toISO()}, diff: ${scheduleTime.toMillis() - now.toMillis()}ms`);
+
+      if (!scheduleTime.isValid) {
+        console.log(`❌ Invalid time for ${userId}: ${text}`);
+        console.log("❌ Invalid time.", adminKeyboard);
+        return;
+      }
+      if (scheduleTime.toMillis() <= now.toMillis() + 300000) {
+        console.log(`❌ Time too close for ${userId}: ${text}, diff: ${scheduleTime.toMillis() - now.toMillis()}ms`);
+        console.log("❌ Time passed or too close.", adminKeyboard);
+        return;
+      }
+      userState[userId].userBroadcastData.time = scheduleTime.toJSDate();
+      userState[userId].state = "awaiting_user_broadcast_schedule_confirmation";
+      console.log(`[${userId}]: awaiting_user_broadcast_schedule_confirmation`);
+      bot.sendMessage(chatId, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "✓ Confirm", callback_data: "confirm_user_broadcast_schedule" }],
+            [{ text: "✗ Cancel", callback_data: "cancel_user_broadcast_schedule" }]
+          ]
+        }
+      });
+    } catch (error) {
+      console.error(`❌ ${userId}:`, error);
+      console.log("❌ Error.", adminKeyboard);
+    }
+    return;
+  }
+
+  if (userState[userId]?.state === "awaiting_scheduled_content") {
+    console.log(`Processing content for ${userId}`);
+    if (media_group_id !== null) {
+      if (!mediaGroups[media_group_id]) {
+        mediaGroups[media_group_id] = { messages: [], timeout: null };
+        console.log(`Media group ${media_group_id} for ${userId}`);
+      }
+      mediaGroups[media_group_id].messages.push(msg);
+      console.log(`Added to ${media_group_id}, messages: ${mediaGroups[media_group_id].messages.length}`);
+
+      if (mediaGroups[media_group_id].timeout) {
+        clearTimeout(mediaGroups[media_group_id].timeout);
+        console.log(`Cleared timer for ${media_group_id}`);
+      }
+
+      mediaGroups[media_group_id].timeout = setTimeout(() => {
+        console.log(`Finalizing ${media_group_id} for ${userId}`);
+        userState[userId].scheduledData.content = { mediaGroup: mediaGroups[media_group_id].messages };
+        userState[userId].state = "awaiting_scheduled_time";
+        console.log(`[${userId}]: awaiting_scheduled_time`);
+        bot.sendMessage(chatId, adminKeyboard);
+        delete mediaGroups[media_group_id];
+        console.log(`Deleted ${media_group_id}`);
+      }, 5000);
+    } else if (msg.text || msg.photo || msg.video || msg.document) {
+      userState[userId].scheduledData.content = {
+        text: msg.text,
+        media: msg.photo ? { photo: msg.photo, caption: msg.caption } :
+          msg.video ? { video: msg.video, caption: msg.caption } :
+          msg.document ? { document: msg.document, caption: msg.caption } :
+          null
+      };
+      userState[userId].state = "awaiting_scheduled_time";
+      console.log(`[${userId}]: awaiting_scheduled_time`);
+      bot.sendMessage(chatId, adminKeyboard);
+    } else {
+      console.log(`❌ Invalid content for ${userId}: ${msg.text}`);
+      console.log("❌ Send media.", adminKeyboard);
+    }
+    return;
+  }
+
+  if (userState[userId]?.state === "awaiting_scheduled_time") {
+    if (!/^\d{2}\.\d{2}\.\d{4} [0-2]\d:[0-5]\d$/.test(text)) {
+      console.log(`❌ Invalid time for ${userId}: ${text}`);
+      console.log("❌ Format: DD.MM.YYYY HH:MM.", adminKeyboard);
+      return;
+    }
+    try {
+      const [date, time] = text.split(" ");
+      const [day, month, year] = date.split(".").map(Number);
+      const [hours, minutes] = time.split(":").map(Number);
+      const scheduleTime = DateTime.fromObject(
+        { year, month, day, hour: hours, minute: minutes },
+        { zone: "Asia/Yekaterinburg" }
+      );
+      const now = DateTime.now().setZone("Asia/Yekaterinburg");
+
+      console.log(`Parsed time for ${userId}: ${scheduleTime.toISO()}, localTime: ${scheduleTime.toLocaleString(DateTime.DATETIME_FULL)}, now: ${now.toISO()}, diff: ${scheduleTime.toMillis() - now.toMillis()}ms`);
+
+      if (!scheduleTime.isValid) {
+        console.log(`❌ Invalid time for ${userId}: ${text}`);
+        console.log("❌ Invalid time.", adminKeyboard);
+        return;
+      }
+      if (scheduleTime.toMillis() <= now.toMillis() + 300000) {
+        console.log(`❌ Time too close for ${userId}: ${text}, diff: ${scheduleTime.toMillis() - now.toMillis()}ms`);
+        console.log("❌ Time passed or too close.", adminKeyboard);
+        return;
+      }
+      userState[userId].scheduledData.time = scheduleTime.toJSDate();
+      userState[userId].state = "awaiting_scheduled_channels";
+      console.log(`[${userId}]: awaiting_scheduled_channels`);
+
+      if (!config.channels || !Object.keys(config.channels).length) {
+        console.log(`⚠ No channels for ${userId}`);
+        bot.sendMessage(chatId, "⚠ No channels.", adminKeyboard);
+        delete userState[userId];
+        return;
+      }
+
+      const channelButtons = Object.entries(config.channels).map(([code, channel]) => [
+        { text: channel.name || code, callback_data: `select_channel|${code}` }
+      ]);
+
+      bot.sendMessage(chatId, {
+        reply_markup: { inline_keyboard: [...channelButtons, [{ text: "✓ Finish", callback_data: "finish_channels" }]] }
+      });
+      setTimeout(() => {
+        if (userState[userId]?.state === "awaiting_scheduled_channels") {
+          console.log(`⚠ Channel selection timeout for ${userId}`);
+          bot.sendMessage(config.adminChannelId, "⚠ Channel selection not completed.", adminKeyboard);
+          delete userState[userId];
+        }
+      }, 300000);
+      return;
+    } catch (error) {
+      console.error(`❌ Time processing error for ${userId}:`, error);
+      bot.sendMessage(chatId, "❌ Error.", adminKeyboard);
+    }
+    return;
+  }
+
+  if (userState[userId]?.state === "awaiting_user_unban") {
+    if (!text || !/^\d+$/.test(text)) {
+      console.log(`❌ Invalid user ID for ${userId}: ${text}`);
+      bot.sendMessage(chatId, "❌ User ID must be a number.", adminKeyboard);
+      return;
+    }
+    const userIdToUnban = text;
+    if (!config.bannedUsers[userIdToUnban]) {
+      console.log(`⚠ User ${userIdToUnban} not banned for ${userId}`);
+      bot.sendMessage(config.adminChannelId, `⚠ User ${userIdToUnban} not banned.`, adminKeyboard);
+      delete userState[userId];
+      return;
+    }
+    delete config.bannedUsers[userIdToUnban];
+    await saveConfig(config);
+    console.log(`User ${userIdToUnban} unbanned for ${userId}`);
+    bot.sendMessage(config.adminChannelId, `✓ User ${userIdToUnban} unbanned.`, adminKeyboard);
+    delete userState[userId];
+    return;
+  }
+};
+
+const handleCallbackQuery = async (query) => {
+  const [action, ...params] = query.data.split("|");
+  const userId = query.from.id;
+  const chatId = query.message.chat.id;
+
+  console.log("📩 CallbackData:", {
+    data: query.data,
+    params: params.join(", "),
+    userState: userState[userId]?.state || "none",
+  });
+
+  if (action === "select_channel") {
+    if (userState[userId]?.state !== "awaiting_scheduled_channels") {
+      console.log(`⚠ User ${userId}: invalid state ${userState[userId]?.state || "none"}`);
+      await bot.answerCallbackQuery(query.id, { text: "⚠ Invalid state.", show_alert: true });
+      return;
+    }
+    const channelCode = params[0];
+    if (!config.channels[channelCode]) {
+      console.log(`⚠ Channel ${channelCode} does not exist for ${userId}`);
+      bot.answerCallbackQuery(query.id, { text: `⚠ Channel ${channelCode} does not exist.`, show_alert: true });
+      return;
+    }
+    userState[userId].scheduledData.channels = userState[userId].scheduledData.channels || [];
+    if (!userState[userId].scheduledData.channels.includes(channelCode)) {
+      userState[userId].scheduledData.channels.push(channelCode);
+      console.log(`Channel ${channelCode} added for ${userId}`);
+      bot.answerCallbackQuery(query.id, { text: `✓ Channel ${channelCode} added.` });
+    } else {
+      console.log(`⚠ Channel ${channelCode} already selected for ${userId}`);
+      bot.answerCallbackQuery(query.id, { text: `⚠ Channel ${channelCode} already selected.`, show_alert: true });
+    }
+    return;
+  }
+
+  if (action === "finish_channels") {
+    if (!userState[userId] || userState[userId].state !== "awaiting_scheduled_channels" || !userState[userId].scheduledData?.channels?.length) {
+      console.log(`⚠ Channel selection error for ${userId}:`, {
+        userStateExists: !!userState[userId],
+        currentState: userState[userId]?.state || "none",
+        channelsSelected: userState[userId]?.scheduledData?.channels?.length || 0,
+      });
+      bot.answerCallbackQuery(query.id, { text: "⚠ Select at least one channel.", show_alert: true });
+      return;
+    }
+    userState[userId].state = "awaiting_pin_confirmation";
+    userState[userId].scheduledData.messageId = Date.now().toString();
+    console.log(`[${userId}]: awaiting_pin_confirmation`);
+    await bot.sendMessage(config.adminChannelId, "📌 Pin message in channels?", {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "Yes", callback_data: "pin_message|true" }, { text: "No", callback_data: "pin_message|false" }],
+        ],
+      },
+    });
+    setTimeout(() => {
+      if (userState[userId]?.state === "awaiting_pin_confirmation") {
+        console.log(`⚠ Pin selection timeout for ${userId}`);
+        bot.sendMessage(config.adminChannelId, "⚠ Pin selection not completed.", adminKeyboard);
+        delete userState[userId];
+      }
+    }, 300000);
+    return;
+  }
+
+  if (action === "pin_message") {
+    if (userState[userId]?.state !== "awaiting_pin_confirmation") {
+      console.log(`⚠ User ${userId}: invalid state ${userState[userId]?.state || "none"}`);
+      bot.answerCallbackQuery(query.id, { text: "⚠ Invalid state.", show_alert: true });
+      return;
+    }
+    const pin = params[0] === "true";
+    const { content, time, channels, messageId } = userState[userId].scheduledData;
+    console.log(`Scheduling message ${messageId}: ${channels.join(", ")}`);
+    config.scheduledMessages = config.scheduledMessages || [];
+    config.scheduledMessages.push({ messageId, content, time: time.toISOString(), channels, pin });
+    await saveConfig(config);
+    console.log(`Message ${messageId} saved to config.scheduledMessages`);
+    scheduleMessage({ messageId, content, time: new Date(time), channels, pin });
+    bot.sendMessage(
+      config.adminChannelId,
+      `✔ Scheduled for ${DateTime.fromJSDate(time).setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL)} to ${channels.map(c => config.channels[c].name || c).join(", ")}${pin ? " with pinning" : ""}.`,
+      adminKeyboard
+    );
+    delete userState[userId];
+    console.log(`State deleted for ${userId}`);
+    bot.answerCallbackQuery(query.id, { text: "✔ Scheduled!" });
+    return;
+  }
+
+  if (action === "delete_channel") {
+    const channelCode = params[0];
+    if (!config.channels[channelCode]) {
+      console.log(`⚠ Channel ${channelCode} does not exist for ${userId}`);
+      bot.answerCallbackQuery(query.id, { text: `⚠ Channel ${channelCode} does not exist.`, show_alert: true });
+      return;
+    }
+    const channelName = config.channels[channelCode].name || channelCode;
+    console.log(`Deleting channel ${channelCode} for ${userId}`);
+    delete config.channels[channelCode];
+    await saveConfig(config);
+    console.log(`Channel ${channelCode} deleted for ${userId}`);
+    bot.sendMessage(config.adminChannelId, `✔ Channel ${channelName} (${channelCode}) deleted.`, adminKeyboard);
+    delete userState[userId];
+    console.log(`State deleted for ${userId}`);
+    bot.answerCallbackQuery(query.id, { text: `✔ Channel ${channelName} deleted.` });
+    return;
+  }
+
+  if (action === "select_broadcast_channel") {
+    if (userState[userId]?.state !== "awaiting_broadcast_channels") {
+      console.log(`⚠ User ${userId}: invalid state ${userState[userId]?.state || "none"}`);
+      bot.answerCallbackQuery(query.id, { text: "⚠ Invalid state.", show_alert: true });
+      return;
+    }
+    const channelCode = params[0];
+    if (!config.channels[channelCode]) {
+      console.log(`⚠ Channel ${channelCode} does not exist for ${userId}`);
+      bot.answerCallbackQuery(query.id, { text: `⚠ Channel ${channelCode} does not exist.`, show_alert: true });
+      return;
+    }
+    userState[userId].broadcastData.channels = userState[userId].broadcastData?.channels || [];
+    if (!userState[userId].broadcastData.channels.includes(channelCode)) {
+      userState[userId].broadcastData.channels.push(channelCode);
+      console.log(`Channel ${channelCode} added for ${userId}`);
+      bot.answerCallbackQuery(query.id, { text: `✔ Channel ${channelCode} added.` });
+    } else {
+      console.log(`⚠ Channel ${channelCode} already selected for ${userId}`);
+      bot.answerCallbackQuery(query.id, { text: `⚠ Channel ${channelCode} already selected.`, show_alert: true });
+    }
+    return;
+  }
+
+  if (action === "finish_broadcast_channels") {
+    if (!userState[userId] || userState[userId].state !== "awaiting_broadcast_channels" || !userState[userId].broadcastData?.channels?.length) {
+      console.log(`⚠ Channel selection error for ${userId}:`, {
+        userStateExists: !!userState[userId],
+        currentState: userState[userId]?.state || "none",
+        channelsSelected: userState[userId]?.broadcastData?.channels?.length || 0,
+      });
+      bot.answerCallbackQuery(query.id, { text: "⚠ Select at least one channel.", show_alert: true });
+      return;
+    }
+    userState[userId].state = "awaiting_broadcast_pin_confirmation";
+    console.log(`[${userId}]: awaiting_broadcast_pin_confirmation`);
+    bot.sendMessage(chatId, "📌 Pin message in channels?", {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "Yes", callback_data: "pin_broadcast_message|true" }, { text: "No", callback_data: "pin_broadcast_message|false" }],
+        ],
+      },
+    });
+    setTimeout(() => {
+      if (userState[userId]?.state === "awaiting_broadcast_pin_confirmation") {
+        console.log(`⚠ Pin selection timeout for ${userId}`);
+        bot.sendMessage(config.adminChannelId, "⚠ Pin selection not completed.", adminKeyboard);
+        delete userState[userId];
+      }
+    }, 300000);
+    return;
+  }
+
+  if (action === "pin_broadcast_message") {
+    if (userState[userId]?.state !== "awaiting_broadcast_pin_confirmation") {
+      console.log(`⚠ User ${userId}: invalid state ${userState[userId]?.state || "none"}`);
+      await bot.answerCallbackQuery(query.id, { text: "⚠ Invalid state.", show_alert: true });
+      return;
+    }
+    const pin = params[0] === "true";
+    const { content, channels } = userState[userId].broadcastData;
+    console.log(`Starting broadcast to channels: ${channels.join(", ")}`);
+
+    try {
+      for (const channelCode of channels) {
+        console.log(`Processing channel ${channelCode}`);
+        if (!config.channels[channelCode]) {
+          console.log(`⚠ Channel ${channelCode} does not exist`);
+          bot.sendMessage(config.adminChannelId, `⚠ Channel ${channelCode} does not exist for broadcast.`, adminKeyboard);
+          continue;
+        }
+
+        const channelId = config.channels[channelCode].channelId;
+        console.log(`Sending to channel ${channelCode} (ID: ${channelId})`);
+
+        try {
+          const admins = await bot.getChatAdministrators(channelId);
+          const botInfo = await bot.getMe();
+          if (!admins.some(a => a.user.id === botInfo.id)) {
+            console.log(`❌ Bot ${botInfo.username} not administrator in channel ${channelCode} (ID: ${channelId})`);
+            bot.sendMessage(config.adminChannelId, `❌ Bot not administrator in ${channelCode} for broadcast.`, adminKeyboard);
+            continue;
+          }
+        } catch (error) {
+          console.error(`❌ Permission check error in ${channelCode} (ID: ${channelId}):`, error.message);
+          bot.sendMessage(config.adminChannelId, `❌ Permission check error in ${channelCode}.`, adminKeyboard);
+          continue;
+        }
+
+        let sentMessageIds = [];
+        if (content.text) {
+          console.log(`Sending text to ${channelCode}: ${content.text.substring(0, 50)}...`);
+          const sentMessage = await bot.sendMessage(channelId, content.text, { parse_mode: "MarkdownV2" });
+          sentMessageIds.push(sentMessage.message_id);
+        } else if (content.mediaGroup) {
+          console.log(`Sending media group to ${channelCode}, items: ${content.mediaGroup.length}`);
+          const mediaArray = content.mediaGroup
+            .map(m => {
+              let type, media;
+              if (m.photo) {
+                type = "photo";
+                media = m.photo[m.photo.length - 1].file_id;
+              } else if (m.video) {
+                type = "video";
+                media = m.video.file_id;
+              } else if (m.document) {
+                type = "document";
+                media = m.document.file_id;
+              } else {
+                console.log(`⚠ Skipping media group item in ${channelCode}: unknown type`);
+                return null;
+              }
+              return { type, media, caption: m.caption || "" };
+            })
+            .filter(item => item !== null);
+
+          if (mediaArray.length === 0) {
+            console.log(`❌ Empty media group for ${channelCode}`);
+            bot.sendMessage(config.adminChannelId, `❌ Empty media group for ${channelCode}.`, adminKeyboard);
+            continue;
+          }
+
+          console.log(`Sending media group to ${channelCode}:`, JSON.stringify(mediaArray, null, 2));
+          const sentMessages = await bot.sendMediaGroup(channelId, mediaArray);
+          sentMessageIds = sentMessages.map(msg => msg.message_id);
+        } else if (content.media) {
+          if (content.media.photo) {
+            console.log(`Sending photo to ${channelCode}`);
+            const sentMessage = await bot.sendPhoto(channelId, content.media.photo[content.media.photo.length - 1].file_id, {
+              caption: content.media.caption || "",
+            });
+            sentMessageIds.push(sentMessage.message_id);
+          } else if (content.media.video) {
+            console.log(`Sending video to ${channelCode}`);
+            const sentMessage = await bot.sendVideo(channelId, content.media.video.file_id, {
+              caption: content.media.caption || "",
+            });
+            sentMessageIds.push(sentMessage.message_id);
+          } else if (content.media.document) {
+            console.log(`Sending document to ${channelCode}`);
+            const sentMessage = await bot.sendDocument(channelId, content.media.document.file_id, {
+              caption: content.media.caption || "",
+            });
+            sentMessageIds.push(sentMessage.message_id);
+          } else {
+            console.log(`⚠ Unknown media type for ${channelCode}`);
+            bot.sendMessage(config.adminChannelId, `⚠ Unknown media type for ${channelCode}.`, adminKeyboard);
+            continue;
+          }
+        }
+
+        if (pin && sentMessageIds.length > 0) {
+          try {
+            await bot.pinChatMessage(channelId, sentMessageIds[0], { disable_notification: true });
+            console.log(`Message ${sentMessageIds[0]} pinned in ${channelCode}`);
+          } catch (error) {
+            console.error(`❌ Pin error for message ${sentMessageIds[0]} in ${channelCode}:`, error.message);
+            bot.sendMessage(config.adminChannelId, `❌ Failed to pin message in ${channelCode}.`, adminKeyboard);
+          }
+        }
+      }
+
+      console.log(`✔ Successful broadcast to channels: ${channels.join(", ")}`);
+      bot.sendMessage(
+        config.adminChannelId,
+        `✔ Broadcast sent to ${channels.map(c => config.channels[c]?.name || c).join(", ")} at ${DateTime.now().setZone("Asia/Yekaterinburg").toLocaleString(DateTime.DATETIME_FULL)}.`,
+        adminKeyboard
+      );
+      delete userState[userId];
+      console.log(`State deleted for ${userId}`);
+      await bot.answerCallbackQuery(query.id, { text: "✔ Broadcast completed!" });
+    } catch (error) {
+      console.error(`❌ Broadcast error:`, error.message);
+      bot.sendMessage(config.adminChannelId, `❌ Broadcast error: ${error.message}`, adminKeyboard);
+      await bot.answerCallbackQuery(query.id, { text: "❌ Broadcast error.", show_alert: true });
+    }
+    return;
+  }
+
+  if (action === "confirm_user_broadcast") {
+    if (userState[userId]?.state !== "awaiting_broadcast_confirmation") {
+      console.log(`⚠ User ${userId}: invalid state ${userState[userId]?.state || "none"}`);
+      await bot.answerCallbackQuery(query.id, { text: "⚠ Invalid state.", show_alert: true });
+      return;
+    }
+    const { content } = userState[userId].userBroadcastData;
+    console.log(`Confirming user broadcast for ${userId}`);
+    console.log(`Content:`, content);
+    await sendUserBroadcast(userId, { content });
+    await bot.answerCallbackQuery(query.id, { text: "✔ User broadcast confirmed!" });
+    return;
+  }
+
+  if (action === "confirm_user_broadcast_schedule") {
+    if (userState[userId]?.state !== "awaiting_user_broadcast_schedule_confirmation") {
+      console.log(`⚠ User ${userId}: invalid state ${userState[userId]?.state || "none"}`);
+      await bot.answerCallbackQuery(query.id, { text: "⚠ Invalid state.", show_alert: true });
+      return;
+    }
+    const { content, time } = userState[userId].userBroadcastData;
+    console.log(`Confirming user broadcast for ${userId}: ${time.toISOString()}`);
+    console.log(`Content:`, content, `Time:`, time);
+    await sendUserBroadcast(userId, { content, scheduleTime: time });
+    await bot.answerCallbackQuery(query.id, { text: "✔ Scheduled!" });
+    return;
+  }
+
+  if (action === "cancel_user_broadcast" || action === "cancel_user_broadcast_schedule") {
+    console.log(`Canceling broadcast ${userId}`);
+    delete userState[userId];
+    console.log(`State deleted ${userId}`);
+    bot.sendMessage(config.adminChannelId, "✔ Broadcast canceled.", adminKeyboard);
+    await bot.answerCallbackQuery(query.id, { text: "✔ Broadcast canceled!" });
+    return;
+  }
+};
+
+// Обработчики событий бота
+bot.on("message", async (msg) => {
+  if (msg.chat.id.toString() === config.adminChannelId) {
+    await handleAdminMessage(msg);
+  }
+});
+
+bot.on("callback_query", async (query) => {
+  await handleCallbackQuery(query);
+});
+
+console.log("✅ Основной бот запущен!");

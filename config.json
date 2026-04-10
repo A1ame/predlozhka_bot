@@ -1,0 +1,14 @@
+{
+  "botToken": "8552858742:AAEJhNI2zBW7eoy2mmDg7KFgdLnNSSjKmEU",
+  "adminChannelId": "-3437320456",
+  "channels": {
+    "main": {
+      "name": "Мой Канал",
+      "channelId": -1003843195613
+    }
+  },
+  "users": {},
+  "bannedUsers": {},
+  "pendingMessages": [],
+  "scheduledMessages": []
+}

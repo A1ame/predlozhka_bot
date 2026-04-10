@@ -1,0 +1,367 @@
+[INFO] 2025-07-26 07:11:18
+✅ Logger бот запущен!
+[INFO] 2025-07-26 07:11:26
+✅ Logger бот запущен!
+[INFO] 2025-07-26 07:11:26
+Статус бота в админском чате -1002737100564: {
+  "isAdmin": true,
+  "botId": 7617714709,
+  "botUsername": "predlozhka_web_bot"
+}
+[ERROR] 2025-07-26 07:11:29
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:11:33
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:11:37
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:11:40
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:11:44
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:11:47
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:11:51
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:11:54
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:11:58
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:01
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:05
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:09
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:12
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:16
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:19
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:23
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:26
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:30
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:34
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:37
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:41
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:44
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:48
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:51
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:55
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:12:58
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:13:02
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:13:05
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:13:09
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:13:13
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:13:16
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:13:20
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:13:23
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:13:27
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[INFO] 2025-07-26 07:13:33
+✅ Logger бот запущен!
+[ERROR] 2025-07-26 07:13:33
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[INFO] 2025-07-26 07:13:33
+Статус бота в админском чате -1002737100564: {
+  "isAdmin": true,
+  "botId": 7617714709,
+  "botUsername": "predlozhka_web_bot"
+}
+[ERROR] 2025-07-26 07:13:40
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:13:41
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:13:47
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[INFO] 2025-07-26 07:14:38
+✅ Logger бот запущен!
+[INFO] 2025-07-26 07:14:39
+Статус бота в админском чате -1002737100564: {
+  "isAdmin": true,
+  "botId": 7617714709,
+  "botUsername": "predlozhka_web_bot"
+}
+[INFO] 2025-07-26 07:14:45
+✅ Logger бот запущен!
+[ERROR] 2025-07-26 07:14:48
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:14:52
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:14:56
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:14:59
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:15:03
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:15:06
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[ERROR] 2025-07-26 07:15:10
+error: [polling_error] %j {
+  "code": "ETELEGRAM",
+  "message": "ETELEGRAM: 409 Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+}
+[INFO] 2025-07-26 07:23:56
+✅ Logger бот запущен!
+[INFO] 2025-07-26 07:26:36
+✅ Logger бот запущен!
+[INFO] 2025-07-26 07:27:12
+✅ Logger бот запущен!
+[INFO] 2025-07-26 07:27:13
+Статус бота в админском чате -1002737100564: {
+  "isAdmin": true,
+  "botId": 7617714709,
+  "botUsername": "predlozhka_web_bot"
+}
+[INFO] 2025-07-26 07:46:36
+✅ Logger бот запущен!
+[INFO] 2025-07-26 07:46:37
+Статус бота в админском чате -1002737100564: {
+  "isAdmin": true,
+  "botId": 7617714709,
+  "botUsername": "predlozhka_web_bot"
+}
+[INFO] 2025-07-26 07:46:42
+Входящее сообщение от 1442060396 в чате -1002737100564: {
+  "text": "📋 Список каналов",
+  "chatType": "supergroup",
+  "isAdminChat": true
+}
+[INFO] 2025-07-26 07:46:42
+Список каналов отправлен: test: test (-1002707338601)
+UKRTB: УКРТБ (-1002038750472)
+TEST: ТЕСТ 2 (-1002698912911)
+[INFO] 2025-07-26 07:46:43
+Входящее сообщение от 1442060396 в чате -1002737100564: {
+  "text": "📋 Список каналов",
+  "chatType": "supergroup",
+  "isAdminChat": true
+}
+[INFO] 2025-07-26 07:46:44
+Список каналов отправлен: test: test (-1002707338601)
+UKRTB: УКРТБ (-1002038750472)
+TEST: ТЕСТ 2 (-1002698912911)
+[INFO] 2025-07-26 07:46:46
+Входящее сообщение от 1442060396 в чате -1002737100564: {
+  "text": "📨 Рассылка",
+  "chatType": "supergroup",
+  "isAdminChat": true
+}
+[INFO] 2025-07-26 07:46:49
+Входящее сообщение от 1442060396 в чате -1002737100564: {
+  "text": "ываыв",
+  "chatType": "supergroup",
+  "isAdminChat": true
+}
+[INFO] 2025-07-26 07:46:51
+📩 Callback: {
+  "data": "select_broadcast_channel|test",
+  "action": "select_broadcast_channel",
+  "params": "test",
+  "userState": "awaiting_broadcast_channels",
+  "userId": 1442060396,
+  "chatId": -1002737100564
+}
+[INFO] 2025-07-26 07:46:52
+📩 Callback: {
+  "data": "select_broadcast_channel|TEST",
+  "action": "select_broadcast_channel",
+  "params": "TEST",
+  "userState": "awaiting_broadcast_channels",
+  "userId": 1442060396,
+  "chatId": -1002737100564
+}
+[INFO] 2025-07-26 07:46:52
+Выбор канала для рассылки
+[INFO] 2025-07-26 07:46:53
+📩 Callback: {
+  "data": "finish_broadcast_channels",
+  "action": "finish_broadcast_channels",
+  "params": "",
+  "userState": "awaiting_broadcast_channels",
+  "userId": 1442060396,
+  "chatId": -1002737100564
+}
+[INFO] 2025-07-26 07:46:54
+📩 Callback: {
+  "data": "pin_broadcast_message|true",
+  "action": "pin_broadcast_message",
+  "params": "true",
+  "userState": "awaiting_broadcast_pin",
+  "userId": 1442060396,
+  "chatId": -1002737100564
+}
+[INFO] 2025-07-26 07:46:55
+✔ Сообщение 59 закреплено в test
+[INFO] 2025-07-26 07:46:56
+Отправка текста в TEST: ываыв...
+[INFO] 2025-07-26 07:46:56
+✔ Сообщение 19 закреплено в TEST
+[INFO] 2025-07-26 07:47:54
+Входящее сообщение от 1442060396 в чате 1442060396: {
+  "text": "ыовсыв",
+  "chatType": "private",
+  "isAdminChat": false
+}
+[INFO] 2025-07-31 22:40:23
+✅ Logger бот запущен!
+[INFO] 2025-07-31 22:40:24
+Статус бота в админском чате -1002737100564: {
+  "isAdmin": true,
+  "botId": 7617714709,
+  "botUsername": "predlozhka_web_bot"
+}
+[ERROR] 2025-07-31 23:24:16
+❌ Ошибка polling: EFATAL: Error: read ECONNRESET
+[INFO] 2025-08-01 04:44:38
+✅ Logger бот запущен!
